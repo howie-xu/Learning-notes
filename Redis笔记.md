@@ -254,7 +254,7 @@ redis数据对象redisObject中lru参数，24bit，保存的是以秒为单位�
 # 当前时间秒单位 & (2^24-1)二进制，得到二进制后24位
 ~~~
 
-![redis定期过期策略实现](RedisLRU算法实现.png)
+![redis定期淘汰策略实现](Redis%20LRU算法实现.pdf)
 
 #### LFU
 
@@ -267,3 +267,4 @@ redis数据对象redisObject中lru参数，24bit，高16位以“分”为单位
 redisObject.lru = 当前时间的分单位的最后16位(高16位)  +  00000101(低8位，默认counter=5)
 
 高16位=当前时间的分单位的最后16位
+![redis定期淘汰策略实现](Redis%20LFU算法实现.pdf)
