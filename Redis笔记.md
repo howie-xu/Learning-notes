@@ -254,7 +254,7 @@ redis数据对象redisObject中lru参数，24bit，保存的是以秒为单位�
 # 当前时间秒单位 & (2^24-1)二进制，得到二进制后24位
 ~~~
 
-![redis定期过期策略实现](Redis LRU算法实现.png)
+![redis定期过期策略实现](RedisLRU算法实现.png)
 
 #### LFU
 
