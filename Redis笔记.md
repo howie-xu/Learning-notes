@@ -211,7 +211,11 @@ maxmemory 最大得内存，默认为机器最大内存
 
    + 循环16次后，有时间限制（防止死循环或者时间占用太久）
    
+<<<<<<< HEAD
    ![redis定期过期策略实现](https://imgs-git-main.xucaihao.vercel.app/redis/Redis-Exp.png)
+=======
+   ![redis定期过期策略实现](redis定期过期策略实现.png)
+>>>>>>> dadafd9213555e34fae2c4523cdb167fcf08c328
 
 ### Redis的淘汰策略
 
@@ -254,7 +258,11 @@ redis数据对象redisObject中lru参数，24bit，保存的是以秒为单位�
 # 当前时间秒单位 & (2^24-1)二进制，得到二进制后24位
 ~~~
 
+<<<<<<< HEAD
 ![redis定期过期策略实现](https://imgs-git-main.xucaihao.vercel.app/redis/Redis-LRU.png)
+=======
+![redis定期淘汰策略实现](Redis%20LRU算法实现.pdf)
+>>>>>>> dadafd9213555e34fae2c4523cdb167fcf08c328
 
 #### LFU
 
@@ -266,6 +274,7 @@ redis数据对象redisObject中lru参数，24bit，高16位以“分”为单位
 
 redisObject.lru = 当前时间的分单位的最后16位(高16位)  +  00000101(低8位，默认counter=5)
 
+<<<<<<< HEAD
 修改时：
 
 redisObject.lru = 当前时间的分单位的最后16位(高16位)  +  counter(低8位)
@@ -323,3 +332,7 @@ edis.conf配置：appendonly no默认不开启，appendfilename "appendonly.aof"
 ### 相关源码
 
 25ff7db4616ff5a09153c8f224fac700550bcd34
+=======
+高16位=当前时间的分单位的最后16位
+![redis定期淘汰策略实现](Redis%20LFU算法实现.pdf)
+>>>>>>> dadafd9213555e34fae2c4523cdb167fcf08c328
