@@ -211,24 +211,19 @@ maxmemory 最大得内存，默认为机器最大内存
 
    + 循环16次后，有时间限制（防止死循环或者时间占用太久）
    
-<<<<<<< HEAD
-   ![redis定期过期策略实现](https://imgs-git-main.xucaihao.vercel.app/redis/Redis-Exp.png)
-=======
-   ![redis定期过期策略实现](redis定期过期策略实现.png)
->>>>>>> dadafd9213555e34fae2c4523cdb167fcf08c328
-
+   ![redis定期过期策略实现](https://imgs-seven.vercel.app/redis/Redis-Exp.png)
 ### Redis的淘汰策略
 
-| 策略            | 含义                                                         |
-| --------------- | ------------------------------------------------------------ |
-| volatile-lru    | 根据LRU算法删除设置了超时属性（expire）的键，直到腾出足够的内存为止。如果没有可删除的键对象，回退到noeviction策略。 |
-| allkeys-lru     | 根据LRU算法删除键，不管数据有没有设置超时属性，直到腾出足够的内存为止。 |
-| volatile-lfu    | 在带有过期时间的键中选择最不常用的。                         |
-| allkeys-lfu     | 在所有的键中选择最不常用的。                                 |
-| volatile-random | 在带有过期时间的键中随机选择。                               |
-| allkeys-random  | 在所有的键中随机选择。                                       |
-| volatile-ttl    | 根据键值对象的ttl属性，删除最近即将要过期数据。如果没有，回退到noeviction策略。 |
-| noeviction      | 默认策略，不会删除任何数据，拒绝所有写入操作并返回客户端错误信息（error）OOM commond not allowed when used memory，此时Redis只响应读操作。 |
+| 含义                                                         | 策略            |
+| ------------------------------------------------------------ | --------------- |
+| 根据LRU算法删除设置了超时属性（expire）的键，直到腾出足够的内存为止。如果没有可删除的键对象，回退到noeviction策略。 | volatile-lru    |
+| 根据LRU算法删除键，不管数据有没有设置超时属性，直到腾出足够的内存为止。 | allkeys-lru     |
+| 在带有过期时间的键中选择最不常用的。                         | volatile-lfu    |
+| 在所有的键中选择最不常用的。                                 | allkeys-lfu     |
+| 在带有过期时间的键中随机选择。                               | volatile-random |
+| 在所有的键中随机选择。                                       | allkeys-random  |
+| 根据键值对象的ttl属性，删除最近即将要过期数据。如果没有，回退到noeviction策略。 | volatile-ttl    |
+| 默认策略，不会删除任何数据，拒绝所有写入操作并返回客户端错误信息（error）OOM commond not allowed when used memory，此时Redis只响应读操作。 | noeviction      |
 
 ~~~c
 typedef struct redisObject {
@@ -258,11 +253,7 @@ redis数据对象redisObject中lru参数，24bit，保存的是以秒为单位�
 # 当前时间秒单位 & (2^24-1)二进制，得到二进制后24位
 ~~~
 
-<<<<<<< HEAD
-![redis定期过期策略实现](https://imgs-git-main.xucaihao.vercel.app/redis/Redis-LRU.png)
-=======
-![redis定期淘汰策略实现](Redis%20LRU算法实现.pdf)
->>>>>>> dadafd9213555e34fae2c4523cdb167fcf08c328
+![redis定期淘汰策略实现](https://imgs-seven.vercel.app/redis/Redis-LRU.png)
 
 #### LFU
 
@@ -273,13 +264,11 @@ redis数据对象redisObject中lru参数，24bit，高16位以“分”为单位
 创建时：
 
 redisObject.lru = 当前时间的分单位的最后16位(高16位)  +  00000101(低8位，默认counter=5)
-
-<<<<<<< HEAD
 修改时：
 
 redisObject.lru = 当前时间的分单位的最后16位(高16位)  +  counter(低8位)
 
-![redis定期过期策略实现](https://imgs-seven.vercel.app/redis/Redis-LFU.png)
+![redis定期淘汰策略实现](https://imgs-seven.vercel.app/redis/Redis-LFU.png)
 
 ### Redis持久化策略
 
@@ -331,8 +320,3 @@ edis.conf配置：appendonly no默认不开启，appendfilename "appendonly.aof"
 
 ### 相关源码
 
-25ff7db4616ff5a09153c8f224fac700550bcd34
-=======
-高16位=当前时间的分单位的最后16位
-![redis定期淘汰策略实现](Redis%20LFU算法实现.pdf)
->>>>>>> dadafd9213555e34fae2c4523cdb167fcf08c328
