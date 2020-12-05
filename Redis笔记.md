@@ -270,6 +270,10 @@ redisObject.lru = 当前时间的分单位的最后16位(高16位)  +  counter(�
 
 ![redis定期淘汰策略实现](https://imgs-seven.vercel.app/redis/Redis-LFU.png)
 
+ 当在近期内使用了某个键的时候，那么要对该键进行增加计数，但是只是执行增加计数的操作，实际能不能完成增加计数，这种情况是随机概率的且这种概率随着当前使用频次的增大而减小。可能性随着计数值的增大呈现出如下变化规律：1.0/((counter-LFU_INIT_VAL) * server.lfu_log_factor+1)，如图所示。当达到计数能够表示的最大值255的时候，直接返回该计数。 
+
+![redis定期淘汰策略实现](https://imgs-seven.vercel.app/redis/LFU-计数增加概率分布图.png)
+
 ### Redis持久化策略
 
 #### rdb 
@@ -303,7 +307,7 @@ redis.conf配置：dbfilename "dump.rdb" 当前快照文件名，dir "/usr/local
 
 Append only file，默认不开启，将redis命令记录到文件
 
-edis.conf配置：appendonly no默认不开启，appendfilename "appendonly.aof" 命令记录文件
+redis.conf配置：appendonly no默认不开启，appendfilename "appendonly.aof" 命令记录文件
 
 两个都开启的话，以aof作为持久化策略
 
@@ -319,4 +323,96 @@ edis.conf配置：appendonly no默认不开启，appendfilename "appendonly.aof"
 重写效果：lpush l1 v1; lpush l1 v2 v3; lpop l1;   ----> lpush l1 v1 v2 
 
 ### 相关源码
+
++ redisDb
+
+~~~c
+typedef struct redisDb {
+dict *dict; /* The keyspace for this DB */
+dict *expires; /* Timeout of keys with a timeout set */
+dict *blocking_keys; /* Keys with clients waiting for data (BLPOP)*/
+dict *ready_keys; /* Blocked keys that received a PUSH */
+dict *watched_keys; /* WATCHED keys for MULTI/EXEC CAS */
+int id; /* Database ID */
+long long avg_ttl; /* Average TTL, just for stats */
+} redisDb;
+~~~
+
+重点关注的其中的三个变量dict *dict、dict *expire以及id。
+
+id代表了该db在redisServer中的编号。redisServer一共存在dbnum个redisDb，server.dbnum是在redis启动的时候设置的，通过server.dbnum=CONFIG_DEFAULT_DBNUM(默认是16)进行初始化。dict用于存放所有的键值对，无论是否设置了过期时间，expire只用于存放设置了过期时间的键值对的值对象。 
+
++  redisObject 
+
+~~~c
+typedef struct redisObject {
+unsigned type:4;
+unsigned encoding:4;
+unsigned lru:LRU_BITS; /* LRU time (relative to global lru_clock) or
+* LFU data (least significant 8 bits frequency
+* and most significant 16 bits decreas time). */
+int refcount;
+void *ptr;
+} robj;
+~~~
+
+type代表了redis中的键对应的值是redis提供的五种对象之中的哪种类型;encoding是这种对象的底层实现方式，redis为每种对象至少提供了两种实现方式;lru，在使用lru相关的策略时，其24位保存的是以秒为单位的该对象上一次被访问的时间，如果使用的是lfu，那么高的16位以分为单位保存着上一次访问的时间，低8位保存着按照某种规则实现的某段时间内的使用频次。以上元素都是使用“位域”实现，节省内存。refcount保存着该对象的引用计数，用于对象的共享和释放。ptr实际指向了该对象的底层实现。 
+
++ estimateObjectIdleTime(LRU中计算key多久时间未访问算法)
+
+~~~c
+unsigned long long estimateObjectIdleTime(robj *o) {
+unsigned long long lruclock = LRU_CLOCK();
+/* if条件代表了lruclock和o->lru都在同一个范围之内的情况，表示没有发生回绕 */
+if (lruclock >= o->lru) {
+return (lruclock - o->lru) * LRU_CLOCK_RESOLUTION;
+/* 时钟的大小超过了lruclock能够表示的范围，发生了回绕，因此间隔的时间等于lruclock加上LRU_CLOCK_MAX减去o->lru。
+* linux内核中的jiffies回绕解决方案设计的更为精妙，可以参考《linux内核设计与实现》一书或博客（此处为超链接）的讲解。
+*/
+} else {
+return (lruclock + (LRU_CLOCK_MAX - o->lru)) *
+LRU_CLOCK_RESOLUTION;
+}
+}
+~~~
+
++ LFUDecrAndReturn（LFU中根据未访问时长计算counter算法）
+
+~~~c
+unsigned long LFUDecrAndReturn(robj *o) {
+/* LFU策略获取键的上一次更新的时间，单位为分钟 */
+unsigned long ldt = o->lru >> 8;
+/* 获取键的使用频次信息 */
+unsigned long counter = o->lru & 255;
+/* 如果距离上一次执行decrement的时间超过了lfu_decay_time的话，那么将使用频次减少，表示近期并没有使用到该键 */
+if (LFUTimeElapsed(ldt) >= server.lfu_decay_time && counter) {
+if (counter > LFU_INIT_VAL*2) {
+counter /= 2;
+if (counter < LFU_INIT_VAL*2) counter = LFU_INIT_VAL*2;
+} else {
+counter--;
+}
+/* 更新键的LRU和使用频次信息 */
+o->lru = (LFUGetTimeInMinutes()<<8) | counter;
+}
+return counter;
+}
+~~~
+
++ LFULogIncr（LFU中key被访问后增加counter算法）
+
+~~~c
+/* 概率性的增长趋势: 当前的counter值越大，那么在当前的值上增加的概率就越小;
+* 如果counter的值达到了255,那么直接返回255，不再增加任何的值
+*/
+uint8_t LFULogIncr(uint8_t counter) {
+if (counter == 255) return 255;
+double r = (double)rand()/RAND_MAX; /*RAND_MAX是系统的宏定义 */
+double baseval = counter - LFU_INIT_VAL;
+if (baseval < 0) baseval = 0;
+double p = 1.0/(baseval*server.lfu_log_factor+1);
+if (r < p) counter++;
+return counter;
+}
+~~~
 
