@@ -197,7 +197,7 @@ maxmemory 最大得内存，默认为机器最大内存
 
 3. 怎么去过期（6.0.8版本）
 
-   + 在hash桶中获取设置了过期时间的key。每个hash桶数据取完，但是如果拿到的key超过20个，则不继续对下一个hash取值。如下：
+   + 链地址法，在hash桶中获取设置了过期时间的key。每个hash桶数据取完，但是如果拿到的key超过20个，则不继续对下一个hash取值。如下：
 
      假如第一个hash桶有25个， 则获取到25个key，并且不继续对下一个桶操作；
 
@@ -322,6 +322,8 @@ redis.conf配置：appendonly no默认不开启，appendfilename "appendonly.aof
 
 重写效果：lpush l1 v1; lpush l1 v2 v3; lpop l1;   ----> lpush l1 v1 v2 
 
+### 哨兵
+
 ### 相关源码
 
 + redisDb
@@ -379,40 +381,39 @@ LRU_CLOCK_RESOLUTION;
 + LFUDecrAndReturn（LFU中根据未访问时长计算counter算法）
 
 ~~~c
+/* If the object decrement time is reached decrement the LFU counter but
+ * do not update LFU fields of the object, we update the access time
+ * and counter in an explicit way when the object is really accessed.
+ * And we will times halve the counter according to the times of
+ * elapsed time than server.lfu_decay_time.
+ * Return the object frequency counter.
+ *
+ * This function is used in order to scan the dataset for the best object
+ * to fit: as we check for the candidate, we incrementally decrement the
+ * counter of the scanned objects if needed. */
 unsigned long LFUDecrAndReturn(robj *o) {
-/* LFU策略获取键的上一次更新的时间，单位为分钟 */
-unsigned long ldt = o->lru >> 8;
-/* 获取键的使用频次信息 */
-unsigned long counter = o->lru & 255;
-/* 如果距离上一次执行decrement的时间超过了lfu_decay_time的话，那么将使用频次减少，表示近期并没有使用到该键 */
-if (LFUTimeElapsed(ldt) >= server.lfu_decay_time && counter) {
-if (counter > LFU_INIT_VAL*2) {
-counter /= 2;
-if (counter < LFU_INIT_VAL*2) counter = LFU_INIT_VAL*2;
-} else {
-counter--;
-}
-/* 更新键的LRU和使用频次信息 */
-o->lru = (LFUGetTimeInMinutes()<<8) | counter;
-}
-return counter;
+    unsigned long ldt = o->lru >> 8;
+    unsigned long counter = o->lru & 255;
+    unsigned long num_periods = server.lfu_decay_time ? LFUTimeElapsed(ldt) / server.lfu_decay_time : 0;
+    if (num_periods)
+        counter = (num_periods > counter) ? 0 : counter - num_periods;
+    return counter;
 }
 ~~~
 
 + LFULogIncr（LFU中key被访问后增加counter算法）
 
 ~~~c
-/* 概率性的增长趋势: 当前的counter值越大，那么在当前的值上增加的概率就越小;
-* 如果counter的值达到了255,那么直接返回255，不再增加任何的值
-*/
+/* Logarithmically increment a counter. The greater is the current counter value
+ * the less likely is that it gets really implemented. Saturate it at 255. */
 uint8_t LFULogIncr(uint8_t counter) {
-if (counter == 255) return 255;
-double r = (double)rand()/RAND_MAX; /*RAND_MAX是系统的宏定义 */
-double baseval = counter - LFU_INIT_VAL;
-if (baseval < 0) baseval = 0;
-double p = 1.0/(baseval*server.lfu_log_factor+1);
-if (r < p) counter++;
-return counter;
+    if (counter == 255) return 255;
+    double r = (double)rand()/RAND_MAX;
+    double baseval = counter - LFU_INIT_VAL;
+    if (baseval < 0) baseval = 0;
+    double p = 1.0/(baseval*server.lfu_log_factor+1);
+    if (r < p) counter++;
+    return counter;
 }
 ~~~
 
