@@ -127,6 +127,8 @@ eval "redis.call('setnx', KEYS[1], ARGV[1]) if lockSet == 1 then redis.call('exp
 
 Redis默认16个库，可以在redis.conf文件中配置
 
+info replication：查询节点信息
+
 select  xxx(1): 用于切换数据库
 
 dbsize 查询库
@@ -322,7 +324,93 @@ redis.conf配置：appendonly no默认不开启，appendfilename "appendonly.aof
 
 重写效果：lpush l1 v1; lpush l1 v2 v3; lpop l1;   ----> lpush l1 v1 v2 
 
-### 哨兵
+### Redis哨兵sentinel
+
+集群  主从   高可用   负载
+
+![redis定期淘汰策略实现](https://imgs-seven.vercel.app/redis/sentinel.jpg)
+
+配置文件sentinel.conf 
+
+~~~yaml
+# sentinel monitor <master-name> <ip> <redis-port> <quorum>
+#
+# Tells Sentinel to monitor this master, and to consider it in O_DOWN
+# (Objectively Down) state only if at least <quorum> sentinels agree.
+#
+# Note that whatever is the ODOWN quorum, a Sentinel will require to
+# be elected by the majority of the known Sentinels in order to
+# start a failover, so no failover can be performed in minority.
+#
+# Replicas are auto-discovered, so you don't need to specify replicas in
+# any way. Sentinel itself will rewrite this configuration file adding
+# the replicas using additional configuration options.
+# Also note that the configuration file is rewritten when a
+# replica is promoted to master.
+#
+# Note: master name should not include special characters or spaces.
+# The valid charset is A-z 0-9 and the three characters ".-_".
+sentinel monitor mymaster 127.0.0.1 6379 2
+
+
+daemonize yes
+port 26379
+protected-mode no
+dir “/usr/local/redis-5.0.5/sentinel-tmp”
+
+sentinel down-after-milliseconds redis-master 30000
+sentinel failover-timeout redis-master 180000
+sentinel parallel-syncs redis-master 1
+~~~
+
+
+
+#### sentinel之间如何通信
+
+sentinel只配置了一个主节点的地址和主节点主机名
+
++ ping
++ info replication
++ publish 订阅发布   HELLO频道
+
+#### 如何判断主节点下线
+
++ 主观下线
+
+  sentinel A  ping master节点，如果一定时间内（down-after-millseconds）内没有回复，sentinel A就会觉得master节点要下线了
+
++ 客观下线
+
+  sentinel  A询问其他sentinel ，其他的sentinel 觉得也下线，则master真正下线
+
+#### 哪个sentinel去执行提升从节点为主节点
+
+选举  raft算法  少数服从多数  超过50%，先到先得
+
+sentinel需要为奇数个，不然可能无法形成多数派，会产生脑裂
+
+#### 升哪个从节点为主节点
+
+断开连接时长  优先级队列（可以配置）  从主节点复制数量   进程ID
+
+### Redis缓存问题
+
+使用建议：
+
++ 接口缓存（要求性能高，用户相关的不能使用）、内容缓存
++ 数据修改时，建议对redis中key进行删除，而不是修改
++ 删除操作先操作reids，再操作DB；其他情况先操作DB，再操作redis；
++ 
+
+#### 缓存一致性
+
+![redis定期淘汰策略实现](https://imgs-seven.vercel.app/redis/缓存一致性问题.jpg)
+
+#### 缓存穿透
+
+![redis定期淘汰策略实现](https://imgs-seven.vercel.app/redis/缓存穿透.jpg)
+
+#### 缓存雪崩
 
 ### 相关源码
 
